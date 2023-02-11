@@ -97,7 +97,7 @@ class ConvEncoderBENDR(_BENDREncoder):
         for i, (width, downsample) in enumerate(zip(enc_width, enc_downsample)):
             self.encoder.add_module("Encoder_{}".format(i), nn.Sequential(
                 nn.Conv1d(in_features, encoder_h, width, stride=downsample, padding=width // 2),
-                nn.Dropout2d(dropout),
+                nn.Dropout1d(dropout),
                 nn.GroupNorm(encoder_h // 2, encoder_h),
                 nn.GELU(),
             ))
@@ -106,7 +106,7 @@ class ConvEncoderBENDR(_BENDREncoder):
         if projection_head:
             self.encoder.add_module("projection-1", nn.Sequential(
                 nn.Conv1d(in_features, in_features, 1),
-                nn.Dropout2d(dropout*2),
+                nn.Dropout1d(dropout*2),
                 nn.GroupNorm(in_features // 2, in_features),
                 nn.GELU()
             ))
@@ -275,11 +275,17 @@ class BendingCollegeWav2Vec(nn.Module):
         if encoder_grad_frac < 1:
             encoder.register_backward_hook(lambda module, in_grad, out_grad:
                                            tuple(encoder_grad_frac * ig for ig in in_grad))
-        super(BendingCollegeWav2Vec, self).__init__(encoder=encoder, context_fn=context_fn,
-                                                    loss_fn=nn.CrossEntropyLoss(), lr=learning_rate,
-                                                    l2_weight_decay=l2_weight_decay,
-                                                    metrics=dict(Accuracy=self._contrastive_accuracy,
-                                                                 Mask_pct=self._mask_pct), **kwargs)
+        super(BendingCollegeWav2Vec, self).__init__()
+
+            #metrics=dict(Accuracy=self._contrastive_accuracy,
+            #Mask_pct=self._mask_pct), **kwargs)
+
+        self.encoder=encoder, 
+        self.context_fn=context_fn,
+        self.loss_fn=nn.CrossEntropyLoss(), 
+        self.lr=learning_rate,
+        self.l2_weight_decay=l2_weight_decay
+
         self.best_metric = None
         self.mask_rate = mask_rate
         self.mask_span = mask_span
