@@ -1,4 +1,6 @@
 import torch
+from torch.utils.data import DataLoader
+import pytorch_lightning as pl
 import random
 import pandas as pd 
 import os, fnmatch
@@ -37,9 +39,11 @@ class MultiTaskDataset(torch.utils.data.Dataset):
         self._compute_stats() # init stats 
 
     def __len__(self):
+        
         return sum(len(self._load_participant_data(path)) for path in self.participants_data_paths) // self.window_len
 
     def __getitem__(self, index):
+        
         file_id = random.choice(self.buffer_size)
         if self.buffer[file_id].cnt > self.buffer[file_id].max_sample:
             self.buffer[file_id] = self._draw_file_sampler() # replace file/sampler
@@ -81,3 +85,40 @@ class MultiTaskDataset(torch.utils.data.Dataset):
                 break
         return sampler
     
+class Dummy(torch.utils.data.Dataset):
+    def __init__(self, root_dir, file_pattern="*stream*.csv", window_len=1000, buffer_size=20):
+        self.window_len = window_len
+        
+
+    def __len__(self):
+        return 32
+
+    def __getitem__(self, index):
+        return torch.ones((self.window_len, 128), dtype=torch.float32)
+
+
+class MultiTaskDataModule(pl.LightningDataModule):
+    def __init__(self, root_dir, file_pattern="*stream*.csv", window_len=1000, buffer_size=20, batch_size=32):
+        super().__init__()
+        self.root_dir = root_dir
+        self.file_pattern = file_pattern
+        self.window_len = window_len
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+    
+    def setup(self, stage: str):
+        # self.test = MultiTaskDataset(self.root_dir, self.file_pattern, self.window_len, self.buffer_size)
+        # self.val = MultiTaskDataset(self.root_dir, self.file_pattern, self.window_len, self.buffer_size)
+        # self.train = MultiTaskDataset(self.root_dir, self.file_pattern, self.window_len, self.buffer_size)
+        self.test = Dummy(self.root_dir, self.file_pattern, self.window_len, self.buffer_size)
+        self.val = Dummy(self.root_dir, self.file_pattern, self.window_len, self.buffer_size)
+        self.train = Dummy(self.root_dir, self.file_pattern, self.window_len, self.buffer_size)
+        
+    def train_dataloader(self):
+        return DataLoader(self.train, batch_size= self.batch_size)
+
+    def val_dataloader(self):
+        return DataLoader(self.val, batch_size= self.batch_size)
+
+    def test_dataloader(self):
+        return DataLoader(self.test, batch_size= self.batch_size)

@@ -7,7 +7,10 @@ __pycache__/
 
 # C extensions
 *.so
-
+#
+log/
+reports/
+wandb/
 # Distribution / packaging
 .Python
 build/

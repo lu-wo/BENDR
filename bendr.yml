@@ -254,4 +254,4 @@ dependencies:
       - seaborn==0.12.2
       - threadpoolctl==3.1.0
       - tqdm==4.64.1
-prefix: /itet-stor/wolflu/net_scratch/conda_envs/bendr
+prefix: /itet-stor/ljie/net_scratch/conda_envs/bendr
