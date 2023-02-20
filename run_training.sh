@@ -1,11 +1,11 @@
 #!/bin/bash
 
-#SBATCH --mail-type=ALL                     # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
+#SBATCH --mail-type=NONE                     # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
 #SBATCH --output=log/%j.out                 # where to store the output (%j is the JOBID), subdirectory must exist
 #SBATCH --error=log/%j.err                  # where to store error messages
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=20G
+#SBATCH --mem=40G
 
 echo "Running on host: $(hostname)"
 echo "In directory:    $(pwd)"
@@ -29,7 +29,7 @@ export TMPDIR
 date=$(date +%y-%m-%d-%H-%M)    
 
 # Binary or script to execute
-python train.py 
+python train_torch.py 
 
 echo "Finished at:     $(date)"
 exit 0

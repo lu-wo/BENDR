@@ -1,6 +1,5 @@
 import wandb
 import yaml
-import sys
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelSummary
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -11,7 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 from model import create_bendr
 from config import params
 import time
-import os
+import os, sys
 from datasets import MultiTaskDataModule
 import logging
 
@@ -24,19 +23,47 @@ def main():
     # Create model directory and Logger
     run_id = time.strftime("%Y%m%d-%H%M%S")
     log_dir = f'reports/logs/{run_id}'
-    
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    # change std output to file in log_dir 
+    sys.stdout = open(f"{log_dir}/stdout.log", "w")
+    
     # Create logging file
     logging.basicConfig(filename=f"{log_dir}/info.log", level=logging.INFO)
     logging.info("Started logging.")
 
     # Obtain datamodule based on config settings for dataset
-    #data_module = get_datamodule()
-    data_module = MultiTaskDataModule(root_dir=params['root_dir'], window_len=params['window_len'],
-        buffer_size=20, batch_size=params['batch_size']) #used for sweepiong
+    # Log hyperparameters and config file
+    logging.info(params)
+
+    data_module = MultiTaskDataModule(
+            root_dir=params['root_dir'], 
+            window_len=params['window_len'],
+            buffer_size=20, 
+            batch_size=params['batch_size']
+        ) #used for sweepiong
+    # data_module.setup(stage="fit")
+
     logging.info("Created data module.")
-    print(params)
+
+    # train_loader = data_module.train_dataloader()
+    # val_loader = data_module.val_dataloader()
+    # test_loader = data_module.test_dataloader()
+
+    # for batch in train_loader:
+    #     print(batch.shape)
+    #     print(f"requires grad {batch.requires_grad}")
+
+    # for batch in val_loader:
+    #     print(batch.shape)
+    #     print(f"requires grad {batch.requires_grad}")
+
+    # for batch in test_loader:
+    #     print(batch.shape)
+    #     print(f"requires grad {batch.requires_grad}")
+
+    
     # Create model based on config.py and hyperparameters.py settings
     # changed to include model factory
     #model = get_model(params[config['model']], config['model'])
@@ -68,28 +95,39 @@ def main():
     #wandb_logger.experiment.config["Model"] = config['model']
     #wandb_logger.experiment.config.update(params[config['model']])
     #wandb_logger.experiment.config.update(params)
-    trainer = pl.Trainer(accelerator="gpu",  # cpu or gpu
-                         devices=-1,  # -1: use all available gpus, for cpu e.g. 4
-                         enable_progress_bar=True,  # disable progress bar
-                         # show progress bar every 500 iterations
-                         # precision=16, # 16 bit float precision for training
-                         #logger=[tb_logger, wandb_logger],  # log to tensorboard and wandb
-                         logger = [tb_logger],
+    logging.info("Created logger.")
 
-                         #max_epochs=params[config['model']]['epochs'],  # max number of epochs
-                         max_epochs=params['epochs'],
-                         callbacks=[EarlyStopping(monitor="Validation Loss", patience=3),  # early stopping
-                                    ModelSummary(max_depth=1),  # model summary
-                                    ModelCheckpoint(log_dir, monitor='Validation Loss', save_top_k=1),
-                                    # save best model
-                                    # TQDMProgressBar(10)
-                                    ],
-                         auto_lr_find=True  # automatically find learning rate
-                         )
+    trainer = pl.Trainer(
+        accelerator="gpu",  # cpu or gpu
+        devices=-1,  # -1: use all available gpus, for cpu e.g. 4
+        enable_progress_bar=True,  # disable progress bar
+        # show progress bar every 500 iterations
+        # precision=16, # 16 bit float precision for training
+        #logger=[tb_logger, wandb_logger],  # log to tensorboard and wandb
+        logger = [tb_logger],
+
+        #max_epochs=params[config['model']]['epochs'],  # max number of epochs
+        max_epochs=params['epochs'],
+        callbacks=[
+        #EarlyStopping(monitor="val_loss", patience=5),  # early stopping
+        # ModelSummary(max_depth=1),  # model summary
+        ModelCheckpoint(
+            log_dir, 
+            monitor='val_loss', 
+            save_top_k=1),
+        ],
+        auto_lr_find=True  # automatically find learning rate
+    )
+    
     logging.info("Start training.")
     trainer.fit(model, data_module)  # train the model
     logging.info("Finished training.")
+
+    logging.info("Start testing.")
     trainer.test(model, data_module)  # test the model
+    logging.info("Finished testing.")
+
+    logging.info("Finished logging.")
 
     
 if __name__ == "__main__":

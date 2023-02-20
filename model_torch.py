@@ -1,4 +1,3 @@
-import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -49,7 +48,7 @@ def _make_mask(shape, p, total, span, allow_no_inds=False):
 
 
 
-class BENDR(pl.LightningModule):
+class BENDR(nn.Module):
     """
     A more wav2vec 2.0 style of constrastive self-supervision, more inspired-by than exactly like it.
     """
@@ -110,115 +109,6 @@ class BENDR(pl.LightningModule):
         loss = self.calculate_loss(logits, z)
 
         return loss 
-
-    def training_step(self, batch, batch_idx):
-        #x, y = batch
-        x = batch
-
-        x = x.permute(0, 2, 1)
-        z = self.encoder(x)
-
-        if self.permuted_encodings:
-            z = z.permute([1, 2, 0])
-        unmasked_z = z.clone()
-        batch_size, feat, samples = z.shape
-        mask = _make_mask((batch_size, samples), self.mask_rate, samples, self.mask_span) 
-
-        c = self.context_fn(z, mask)
-
-        # Select negative candidates and generate labels for which are correct labels
-        negatives, negative_inds = self._generate_negatives(z)
-
-        # Prediction -> batch_size x predict_length x predict_length
-        logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
-
-        self.log("train_loss", loss)
-
-        # tensorboard_logs = {'train_loss': loss}
-
-        # self.log("training dummy", 1)
-
-        print(f"Training loss: {loss}")
-
-        return loss 
-    
-    
-    def validation_step(self, batch, batch_idx):
-        #x, y = batch
-        x = batch
-        x = x.permute(0, 2, 1)
-        z = self.encoder(x)
-
-        if self.permuted_encodings:
-            z = z.permute([1, 2, 0])
-
-        unmasked_z = z.clone()
-        batch_size, feat, samples = z.shape
-
-        mask = torch.zeros((batch_size, samples), requires_grad=False, dtype=torch.bool)
-        half_avg_num_seeds = max(1, int(samples * self.mask_rate * 0.5))
-        if samples <= self.mask_span * half_avg_num_seeds:
-            raise ValueError("Masking the entire span, pointless.")
-        mask[:, _make_span_from_seeds((samples // half_avg_num_seeds) * np.arange(half_avg_num_seeds).astype(int),
-                                            self.mask_span)] = True
-
-        # print(f'x : {x.size()}')
-        # print(f'x : {z.size()}')
-        # print(f'mask : {mask.size()}')
-        
-        c = self.context_fn(z, mask)
-
-        # Select negative candidates and generate labels for which are correct labels
-        negatives, negative_inds = self._generate_negatives(z)
-
-        logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
-
-        self.log("val_loss", loss)
-
-        print(f"Validation loss: {loss}")
-
-        return loss 
-
-    def test_step(self, batch, batch_idx):
-        #x, y = batch
-        x = batch
-        x = x.permute(0, 2, 1)
-        z = self.encoder(x)
-
-        if self.permuted_encodings:
-            z = z.permute([1, 2, 0])
-
-        unmasked_z = z.clone()
-        batch_size, feat, samples = z.shape
-
-        mask = torch.zeros((batch_size, samples), requires_grad=False, dtype=torch.bool)
-        half_avg_num_seeds = max(1, int(samples * self.mask_rate * 0.5))
-        if samples <= self.mask_span * half_avg_num_seeds:
-            raise ValueError("Masking the entire span, pointless.")
-        mask[:, _make_span_from_seeds((samples // half_avg_num_seeds) * np.arange(half_avg_num_seeds).astype(int),
-                                            self.mask_span)] = True
-
-        # print(f'x : {x.size()}')
-        # print(f'x : {z.size()}')
-        # print(f'mask : {mask.size()}')
-        
-        c = self.context_fn(z, mask)
-
-        # Select negative candidates and generate labels for which are correct labels
-        negatives, negative_inds = self._generate_negatives(z)
-
-        logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
-        
-        # tensorboard_logs = {'test_loss': loss}
-
-        self.log("test_loss", loss)
-
-        print(f"Test loss: {loss}")
-
-        return loss 
     
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.l2_weight_decay)
@@ -234,6 +124,8 @@ class BENDR(pl.LightningModule):
         logits = F.cosine_similarity(z, targets, dim=-1) / self.temp
         if negative_in_target.any():
             logits[1:][negative_in_target] = float("-inf")
+
+        print(f"logits : {logits}")
 
         return logits.view(-1, logits.shape[-1])
 
