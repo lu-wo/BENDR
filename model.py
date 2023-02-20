@@ -62,9 +62,9 @@ class BENDR(pl.LightningModule):
         super().__init__()
         self.predict_length = mask_span
         self._enc_downsample = encoder.downsampling_factor
-        if multi_gpu:
-            encoder = nn.DataParallel(encoder)
-            context_fn = nn.DataParallel(context_fn)
+        # if multi_gpu:
+        #     encoder = nn.DataParallel(encoder)
+        #     context_fn = nn.DataParallel(context_fn)
         if encoder_grad_frac < 1:
             encoder.register_backward_hook(lambda module, in_grad, out_grad:
                                            tuple(encoder_grad_frac * ig for ig in in_grad))
@@ -88,28 +88,30 @@ class BENDR(pl.LightningModule):
         self.unmasked_negative_frac = unmasked_negative_frac
         self.num_negatives = num_negatives
 
+        # self.save_hyperparameters() # wandb 
+
     
-    def common_step(self, batch, batch_idx):
-        x, y = batch
-        x = x.permute(0, 2, 1)
-        z = self.encoder(x)
+    # def common_step(self, batch, batch_idx):
+    #     x, y = batch
+    #     x = x.permute(0, 2, 1)
+    #     z = self.encoder(x)
 
-        if self.permuted_encodings:
-            z = z.permute([1, 2, 0])
-        unmasked_z = z.clone()
-        batch_size, feat, samples = z.shape
-        mask = _make_mask((batch_size, samples), self.mask_rate, samples, self.mask_span) 
+    #     if self.permuted_encodings:
+    #         z = z.permute([1, 2, 0])
+    #     unmasked_z = z.clone()
+    #     batch_size, feat, samples = z.shape
+    #     mask = _make_mask((batch_size, samples), self.mask_rate, samples, self.mask_span) 
 
-        c = self.context_fn(z, mask)
+    #     c = self.context_fn(z, mask)
 
-        # Select negative candidates and generate labels for which are correct labels
-        negatives, negative_inds = self._generate_negatives(z)
+    #     # Select negative candidates and generate labels for which are correct labels
+    #     negatives, negative_inds = self._generate_negatives(z)
 
-        # Prediction -> batch_size x predict_length x predict_length
-        logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
+    #     # Prediction -> batch_size x predict_length x predict_length
+    #     logits = self._calculate_similarity(unmasked_z, c, negatives)
+    #     loss = self.calculate_loss(logits, z)
 
-        return loss 
+    #     return loss 
 
     def training_step(self, batch, batch_idx):
         #x, y = batch
@@ -134,13 +136,7 @@ class BENDR(pl.LightningModule):
         loss = self.calculate_loss(logits, z)
 
         self.log("train_loss", loss)
-
-        # tensorboard_logs = {'train_loss': loss}
-
-        # self.log("training dummy", 1)
-
-        print(f"Training loss: {loss}")
-
+        # print(f"Training loss: {loss}")
         return loss 
     
     
@@ -162,13 +158,8 @@ class BENDR(pl.LightningModule):
             raise ValueError("Masking the entire span, pointless.")
         mask[:, _make_span_from_seeds((samples // half_avg_num_seeds) * np.arange(half_avg_num_seeds).astype(int),
                                             self.mask_span)] = True
-
-        # print(f'x : {x.size()}')
-        # print(f'x : {z.size()}')
-        # print(f'mask : {mask.size()}')
         
         c = self.context_fn(z, mask)
-
         # Select negative candidates and generate labels for which are correct labels
         negatives, negative_inds = self._generate_negatives(z)
 
@@ -176,9 +167,7 @@ class BENDR(pl.LightningModule):
         loss = self.calculate_loss(logits, z)
 
         self.log("val_loss", loss)
-
-        print(f"Validation loss: {loss}")
-
+        # print(f"Validation loss: {loss}")
         return loss 
 
     def test_step(self, batch, batch_idx):
@@ -199,10 +188,6 @@ class BENDR(pl.LightningModule):
             raise ValueError("Masking the entire span, pointless.")
         mask[:, _make_span_from_seeds((samples // half_avg_num_seeds) * np.arange(half_avg_num_seeds).astype(int),
                                             self.mask_span)] = True
-
-        # print(f'x : {x.size()}')
-        # print(f'x : {z.size()}')
-        # print(f'mask : {mask.size()}')
         
         c = self.context_fn(z, mask)
 
@@ -212,12 +197,8 @@ class BENDR(pl.LightningModule):
         logits = self._calculate_similarity(unmasked_z, c, negatives)
         loss = self.calculate_loss(logits, z)
         
-        # tensorboard_logs = {'test_loss': loss}
-
         self.log("test_loss", loss)
-
-        print(f"Test loss: {loss}")
-
+        # print(f"Test loss: {loss}")
         return loss 
     
     def configure_optimizers(self):
@@ -237,7 +218,6 @@ class BENDR(pl.LightningModule):
 
         return logits.view(-1, logits.shape[-1])
 
-
     def _generate_negatives(self, z):
         """Generate negative samples to compare each sequence location against"""
         batch_size, feat, full_len = z.shape
@@ -254,14 +234,11 @@ class BENDR(pl.LightningModule):
         z_k = z_k[negative_inds.view(-1)].view(batch_size, full_len, self.num_negatives, feat)
         return z_k, negative_inds
 
-        
-
     def calculate_loss(self, logits, z):
         labels = torch.zeros(logits.shape[0], device=logits.device, dtype=torch.long)
         # Note the loss_fn here integrates the softmax as per the normal classification pipeline (leveraging logsumexp)
         
         return self.loss_fn(logits, labels) + self.beta * z.pow(2).mean()
-
 
     @staticmethod
     def _mask_pct(inputs, outputs):
@@ -367,7 +344,6 @@ class ConvEncoderBENDR(_BENDREncoder):
     def forward(self, x):
         return self.encoder(x)
 
-
 class _Hax(nn.Module):
     """T-fixup assumes self-attention norms are removed"""
     def __init__(self):
@@ -375,7 +351,6 @@ class _Hax(nn.Module):
 
     def forward(self, x):
         return x
-
 
 class BENDRContextualizer(nn.Module):
 
@@ -497,7 +472,7 @@ def create_bendr(params):
 
 
     bendr = BENDR(encoder, context_fn, params['mask_rate'], params['mask_span'], params['learning_rate'], params['temp'],
-            params['permuted_encodings'], params['permuted_contexts'], params['enc_feat_l2'], params['multi_gpu'],
+            params['permuted_encodings'], params['permuted_contexts'], params['enc_feat_l2'], #params['multi_gpu'],
             params['l2_weight_decay'], params['unmasked_negative_frac'], params['encoder_grad_frac'],
             params['num_negatives'])
     
