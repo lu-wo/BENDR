@@ -42,10 +42,10 @@ def main():
                                   name=f"{run_id}"
                                   )
     tb_logger.log_hyperparams(params)
-    wandb_logger = WandbLogger(project=f"bendr-pretraining",
-                                name=f"{run_id}",
-                                save_dir="./reports/logs/"
-                        )
+    # wandb_logger = WandbLogger(project=f"bendr-pretraining",
+    #                             name=f"{run_id}",
+    #                             save_dir="./reports/logs/"
+    #                     )
     logging.info("Created logger.")
 
     trainer = pl.Trainer(
@@ -55,7 +55,7 @@ def main():
 
         enable_progress_bar=True,  # disable progress bar
         # precision=16, # 16 bit float precision for training
-        logger = [tb_logger, wandb_logger],
+        logger = [tb_logger],
         log_every_n_steps=10, # every n-th batch is logged
 
         max_epochs=params['epochs'],

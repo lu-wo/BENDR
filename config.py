@@ -3,14 +3,14 @@ params = {}
 
 # Training 
 params['epochs'] = 100
-# params['multi_gpu'] = True
-params['gpus'] = 4
-params['learning_rate'] = 1e-5
+params['multi_gpu'] = False
+# params['gpus'] = 2
+params['learning_rate'] = 1e-6
 
 #Dataset and loader
-# params['root_dir'] = '/itet-stor/wolflu/net_scratch/projects/EEGEyeNet_experimental/data/stream_debug' # '/itet-stor/wolflu/net_scratch/projects/EEGEyeNet_experimental/data/stream_debug' # '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream' # change to your path
+# params['root_dir'] = '/itet-stor/wolflu/net_scratch/projects/EEGEyeNet_experimental/data/stream_debug' 
 params['root_dir'] =  '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream' 
-params['batch_size'] = 64
+params['batch_size'] = 32
 params['window_len'] = 2000
 
 #Contextualizer

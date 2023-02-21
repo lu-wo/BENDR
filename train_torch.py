@@ -4,7 +4,7 @@ from model_torch import create_bendr, _make_mask, _make_span_from_seeds
 from config import params
 import time
 import os, sys
-from datasets import MultiTaskDataset 
+from datasets_single_load import MultiTaskDataset 
 import logging
 import torch 
 import fnmatch
@@ -26,6 +26,9 @@ def main():
     log_dir = f'reports/logs/{run_id}'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    # Initialize wandb
+    wandb.init(entity="deepseg", project="bendr-pretraining", name=run_id, config=params)
 
     # change std output to file in log_dir 
     sys.stdout = open(f"{log_dir}/stdout.log", "w")
@@ -69,12 +72,12 @@ def main():
     logging.info(f"Found {len(val_paths)} validation files.")
     logging.info(f"Found {len(test_paths)} test files.")
 
-    train_dataset = MultiTaskDataset(paths=train_paths, window_len=window_len, buffer_size=buffer_size)
-    val_dataset = MultiTaskDataset(paths=val_paths, window_len=window_len, buffer_size=buffer_size)
-    test_dataset = MultiTaskDataset(paths=test_paths, window_len=window_len, buffer_size=buffer_size)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, workers=0)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, workers=0)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, workers=0)
+    train_dataset = MultiTaskDataset(paths=train_paths, window_len=window_len)
+    val_dataset = MultiTaskDataset(paths=val_paths, window_len=window_len)
+    test_dataset = MultiTaskDataset(paths=test_paths, window_len=window_len)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
 
     model = create_bendr(params)
     logging.info("Created model.")
@@ -88,6 +91,8 @@ def main():
         train_loss_acc = 0
         for batch_idx, batch in enumerate(train_loader):
             x = batch
+
+            # print(f"batch {x.shape}")
 
             x = x.permute(0, 2, 1)
             z = model.encoder(x)
@@ -117,11 +122,13 @@ def main():
             loss.backward()
             optimizer.step()
 
-            logging.info(f"Training loss {loss.item()}")
+            # logging.info(f"Training loss {loss.item()}")
 
             if batch_idx % 100 == 0:
+                wandb.log({"train_loss": loss.item()})
                 logging.info(f"Epoch {epoch}, Batch {batch_idx}, Loss {loss.item()}")
         train_loss = train_loss_acc / len(train_loader)
+        wandb.log({"train_loss_epoch": train_loss})
         logging.info(f"Epoch {epoch}, Train Loss {train_loss}")
 
         # validation loop 
@@ -157,11 +164,13 @@ def main():
             loss = model.calculate_loss(logits, z)
             val_loss_acc += loss.item()
 
-            logging.info(f"Validation loss {loss.item()}")
+            # logging.info(f"Validation loss {loss.item()}")
 
             if batch_idx % 100 == 0:
+                wandb.log({"val_loss": loss.item()})
                 logging.info(f"Validation Epoch {epoch}, Batch {batch_idx}, Loss {loss.item()}")
         val_loss = val_loss_acc / len(val_loader)
+        wandb.log({"val_loss_epoch": val_loss})
         logging.info(f"Validation Epoch {epoch}, Loss {val_loss}")
 
         if val_loss < best_val: 
@@ -201,12 +210,14 @@ def main():
         loss = model.calculate_loss(logits, z)
         test_loss_acc += loss.item()
 
-        logging.info(f"Test loss {loss.item()}")
+        # logging.info(f"Test loss {loss.item()}")
 
         if batch_idx % 100 == 0:
+            wandb.log({"test_loss": loss.item()})
             logging.info(f"Test Epoch {epoch}, Batch {batch_idx}, Loss {loss.item()}")
 
     test_loss = test_loss_acc / len(test_loader)
+    wandb.log({"test_loss_epoch": test_loss})
     logging.info(f"Test Loss {test_loss}")
 
     logging.info("--Finished logging.")

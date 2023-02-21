@@ -57,7 +57,7 @@ class BENDR(nn.Module):
             permuted_encodings=False, permuted_contexts=False, enc_feat_l2=0.001, multi_gpu=False,
             l2_weight_decay=1e-4, unmasked_negative_frac=0.25, encoder_grad_frac=1.0,
             num_negatives=100, **kwargs):
-        
+         
         super().__init__()
         self.predict_length = mask_span
         self._enc_downsample = encoder.downsampling_factor
