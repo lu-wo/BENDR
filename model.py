@@ -399,5 +399,3 @@ class BENDRContextualizer(nn.Module):
 
     def save(self, filename):
         torch.save(self.state_dict(), filename)
-
-
