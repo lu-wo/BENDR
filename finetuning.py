@@ -11,9 +11,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 import logging 
+from dn3.utils import min_max_normalize_np
 import time
+from functools import partial
 
-from finetuning_config import params
+from finetuning_config import params as params
 from model import create_bendr
 
 
@@ -29,16 +31,30 @@ sys.stdout = open(f"{log_dir}/stdout.log", "w")
 logging.basicConfig(filename=f"{log_dir}/info.log", level=logging.INFO)
 logging.info("Started logging.")
 
-params_path = os.path.join(params['bendr_dir'], 'version_0', 'hparams.yaml')
-# load yaml file as dict 
-with open(params_path, 'r') as f:
-    params = yaml.unsafe_load(f)
-
 # Load and split data
 np.random.seed(42)
 np_file = np.load(params['data_dir'])
-X = np_file['EEG']
+X = np_file['EEG'][:,:,:128]
+global_min = np.min(X)
+global_max = np.max(X)
 y = np_file['labels']
+logging.info("Loaded data.")
+logging.info(f"X shape: {X.shape}")
+logging.info(f"y shape: {y.shape}")
+
+# normalize and add channel per sample in X 
+for i in range(len(X)):
+    x_min = np.min(X[i])
+    x_max = np.max(X[i])
+    X[i] = min_max_normalize_np(X[i], x_min, x_max)
+    logging.info(f"X[i] shape: {X[i].shape}")
+    val = (x_max - x_min) / (global_max - global_min)
+    # create additional channel 
+    const = np.ones((X[i].shape[1], 1)) * val
+    logging.info(f"const shape: {const.shape}")
+    X[i] = np.concatenate((X[i], const), axis=1)
+logging.info("Normalized data and added channel.")
+logging.info(f"X shape: {X.shape}")
 
 # split data based on first column id 
 ids = np.unique(y[:, 0])
@@ -54,6 +70,7 @@ X_val = X[np.isin(y[:, 0], val_ids)]
 y_val = y[np.isin(y[:, 0], val_ids)]
 X_test = X[np.isin(y[:, 0], test_ids)]
 y_test = y[np.isin(y[:, 0], test_ids)]
+# to each sample 
 
 # create dataloaders
 batch_size = 64
@@ -61,12 +78,34 @@ train_data = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
 val_data = TensorDataset(torch.from_numpy(X_val), torch.from_numpy(y_val))
 test_data = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
 
+# we need to normalize and add the additional channel 
+# def collate_fn(global_min, global_max, batch):
+#     X, y = zip(*batch)
+#     X = torch.stack([torch.from_numpy(x) for x, y in batch])
+#     x_min = torch.min(X)
+#     x_max = torch.max(X)
+#     X = min_max_normalize(X, x_min, x_max)
+#     x_min = torch.min(X)
+#     x_max = torch.max(X)
+#     val = (x_max - x_min) / (global_max - global_min)
+#     # create additional channel 
+#     const = torch.ones(len(X), 1) * val
+#     X = torch.cat((X, const), dim=1)
+#     y = torch.stack([torch.from_numpy(y) for x, y in batch])
+#     return X, y
+# collate = partial(collate_fn, x_min, x_max)
+
 train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
+logging.info("Created dataloaders.")
 
 # load model
-model = create_bendr(params)
+bendr_params_path = os.path.join(params['bendr_dir'], 'version_0', 'hparams.yaml')
+# load yaml file as dict 
+with open(bendr_params_path, 'r') as f:
+    bendr_params = yaml.unsafe_load(f)
+model = create_bendr(bendr_params)
 # make not trainable 
 for param in model.parameters():
     param.requires_grad = False
@@ -76,6 +115,7 @@ ckpt_path = [f for f in os.listdir(params['bendr_dir']) if f.endswith('.ckpt')][
 ckpt_path = os.path.join(params['bendr_dir'], ckpt_path)
 # load weights
 model.load_state_dict(torch.load(ckpt_path)['state_dict'])
+logging.info("Loaded BENDR model.")
 
 # build finetuning MLP
 def build_mlp(hidden_layers, output_logits, hidden_size, dropout):
@@ -145,7 +185,6 @@ model = FinetuningModel(model, params['hidden_layers'], params['output_logits'],
 trainer = Trainer(
     gpus=1, 
     max_epochs=params['epochs'], 
-    progress_bar_refresh_rate=20,
     logger=[tb_logger, wandb_logger],
     callbacks=[
         EarlyStopping(monitor='val_loss', patience=5, verbose=True),
@@ -153,7 +192,11 @@ trainer = Trainer(
     ]
     )
 # train
+logging.info("Started training.")
 trainer.fit(model, train_loader, val_loader)
+logging.info("Finished training.")
 
 # test
+logging.info("Started testing.")
 trainer.test(model, test_dataloaders=test_loader)
+logging.info("Finished testing.")

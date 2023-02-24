@@ -63,6 +63,31 @@ def unfurl(_set: set):
             _list[i] = [_list[i]]
     return tuple(x for z in _list for x in z)
 
+import numpy as np
+
+def min_max_normalize_np(x:np.array, low=-1, high=1):
+    if len(x.shape) == 2:
+        xmin = np.min(x)
+        xmax = np.max(x)
+        if xmax - xmin == 0:
+            x = np.zeros_like(x)
+            return x
+    elif len(x.shape) == 3:
+        xmin = np.min(np.min(x, axis=1, keepdims=True), axis=-1, keepdims=True)
+        xmax = np.max(np.max(x, axis=1, keepdims=True), axis=-1, keepdims=True)
+        constant_trials = (xmax - xmin) == 0
+        if np.any(constant_trials):
+            # If normalizing multiple trials, stabilize the normalization
+            xmax[constant_trials] = xmax[constant_trials] + 1e-6
+
+    x = (x - xmin) / (xmax - xmin)
+
+    # Now all scaled 0 -> 1, remove 0.5 bias
+    x -= 0.5
+    # Adjust for low/high bias and scale up
+    x += (high + low) / 2
+    return (high - low) * x
+
 
 def min_max_normalize(x: torch.Tensor, low=-1, high=1):
     if len(x.shape) == 2:
@@ -73,7 +98,7 @@ def min_max_normalize(x: torch.Tensor, low=-1, high=1):
             return x
     elif len(x.shape) == 3:
         xmin = torch.min(torch.min(x, keepdim=True, dim=1)[0], keepdim=True, dim=-1)[0]
-        xmax = torch.max(torch.max(x, keepdim=True, dim=1)[0], keepdim=True, dim=-1)[0]
+        xmax = torch.max(torch.max(x, keepdim=True, dim=1)[s0], keepdim=True, dim=-1)[0]
         constant_trials = (xmax - xmin) == 0
         if torch.any(constant_trials):
             # If normalizing multiple trials, stabilize the normalization
