@@ -5,7 +5,7 @@
 #SBATCH --error=log/%j.err                  # where to store error messages
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=250G
+#SBATCH --mem=60G
 
 echo "Running on host: $(hostname)"
 echo "In directory:    $(pwd)"
@@ -29,7 +29,7 @@ export TMPDIR
 date=$(date +%y-%m-%d-%H-%M)    
 
 # Binary or script to execute
-python train.py 
+python finetuning.py 
 
 echo "Finished at:     $(date)"
 exit 0

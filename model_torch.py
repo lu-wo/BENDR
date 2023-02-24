@@ -20,6 +20,23 @@ from dn3.trainable.models import StrideClassifier, Classifier
 from dn3.trainable.layers import Flatten, Permute
 from dn3.utils import DN3ConfigException
 
+import torch.nn as nn
+
+
+def init_weights(module):
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
+        nn.init.kaiming_normal_(module.weight)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+    elif isinstance(module, nn.BatchNorm1d):
+        nn.init.constant_(module.weight, 1)
+        nn.init.constant_(module.bias, 0)
+    elif isinstance(module, nn.GroupNorm):
+        nn.init.constant_(module.weight, 1)
+        nn.init.constant_(module.bias, 0)
+    elif isinstance(module, nn.Module):
+        for sub_module in module.children():
+            init_weights(sub_module)
 
 def _make_span_from_seeds(seeds, span, total=None):
     inds = list()
@@ -47,7 +64,6 @@ def _make_mask(shape, p, total, span, allow_no_inds=False):
     return mask
 
 
-
 class BENDR(nn.Module):
     """
     A more wav2vec 2.0 style of constrastive self-supervision, more inspired-by than exactly like it.
@@ -67,7 +83,6 @@ class BENDR(nn.Module):
         if encoder_grad_frac < 1:
             encoder.register_backward_hook(lambda module, in_grad, out_grad:
                                            tuple(encoder_grad_frac * ig for ig in in_grad))
-
 
         self.encoder = encoder
         self.context_fn = context_fn
@@ -107,7 +122,6 @@ class BENDR(nn.Module):
         # Prediction -> batch_size x predict_length x predict_length
         logits = self._calculate_similarity(unmasked_z, c, negatives)
         loss = self.calculate_loss(logits, z)
-
         return loss 
     
     def configure_optimizers(self):
@@ -125,20 +139,17 @@ class BENDR(nn.Module):
         if negative_in_target.any():
             logits[1:][negative_in_target] = float("-inf")
 
-        print(f"logits : {logits}")
-
         return logits.view(-1, logits.shape[-1])
-
 
     def _generate_negatives(self, z):
         """Generate negative samples to compare each sequence location against"""
         batch_size, feat, full_len = z.shape
         z_k = z.permute([0, 2, 1]).reshape(-1, feat)
         with torch.no_grad():
-            # candidates = torch.arange(full_len).unsqueeze(-1).expand(-1, self.num_negatives).flatten()
+            candidates = torch.arange(full_len).unsqueeze(-1).expand(-1, self.num_negatives).flatten()
             negative_inds = torch.randint(0, full_len-1, size=(batch_size, full_len * self.num_negatives))
             # From wav2vec 2.0 implementation, I don't understand
-            # negative_inds[negative_inds >= candidates] += 1
+            negative_inds[negative_inds >= candidates] += 1
 
             for i in range(1, batch_size):
                 negative_inds[i] += i * full_len
@@ -147,13 +158,11 @@ class BENDR(nn.Module):
         return z_k, negative_inds
 
         
-
     def calculate_loss(self, logits, z):
         labels = torch.zeros(logits.shape[0], device=logits.device, dtype=torch.long)
         # Note the loss_fn here integrates the softmax as per the normal classification pipeline (leveraging logsumexp)
         
         return self.loss_fn(logits, labels) + self.beta * z.pow(2).mean()
-
 
     @staticmethod
     def _mask_pct(inputs, outputs):
@@ -173,10 +182,7 @@ class BENDR(nn.Module):
         return desc
 
 
-
 ######################################################################################
-
-
 
 class _BENDREncoder(nn.Module):
     def __init__(self, in_features, encoder_h=256,):
@@ -216,8 +222,8 @@ class ConvEncoderBENDR(_BENDREncoder):
         for i, (width, downsample) in enumerate(zip(enc_width, enc_downsample)):
             self.encoder.add_module("Encoder_{}".format(i), nn.Sequential(
                 nn.Conv1d(in_features, encoder_h, width, stride=downsample, padding=width // 2),
-                nn.Dropout2d(dropout),
-                nn.GroupNorm(encoder_h // 2, encoder_h),
+                nn.Dropout1d(dropout),
+                nn.BatchNorm1d(encoder_h), # nn.GroupNorm(encoder_h // 2, encoder_h),
                 nn.GELU(),
             ))
             in_features = encoder_h
@@ -225,8 +231,8 @@ class ConvEncoderBENDR(_BENDREncoder):
         if projection_head:
             self.encoder.add_module("projection-1", nn.Sequential(
                 nn.Conv1d(in_features, in_features, 1),
-                nn.Dropout2d(dropout*2),
-                nn.GroupNorm(in_features // 2, in_features),
+                nn.Dropout1d(dropout*2),
+                nn.BatchNorm1d(encoder_h), # nn.GroupNorm(in_features // 2, in_features),
                 nn.GELU()
             ))
 

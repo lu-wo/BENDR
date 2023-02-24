@@ -44,6 +44,10 @@ class FileSampler:
         val = (self.max_val - self.min_val) / (global_max - global_min)
         const = torch.ones((self.window_len, 1)) * val
         tensor = torch.cat((tensor, const), dim=1)
+        # check if nan in tensor    
+        if torch.isnan(tensor).any():
+            logging.info(f"NaN in tensor from {self.path}")
+            raise ValueError 
         return tensor
 
     
@@ -88,7 +92,7 @@ class MultiTaskDataModule(pl.LightningDataModule):
         self.window_len = window_len
         self.batch_size = batch_size
 
-        logging.info(f"Root dir {self.root_dir}")   
+        # logging.info(f"Root dir {self.root_dir}")   
         
         """
         Directory structure:

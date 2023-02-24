@@ -11,7 +11,7 @@ from model import create_bendr
 from config import params
 import time
 import os, sys
-from datasets_single_load import MultiTaskDataModule
+from datasets_whole import VirtualDataModule
 import logging
 
 
@@ -28,7 +28,7 @@ def main():
     logging.basicConfig(filename=f"{log_dir}/info.log", level=logging.INFO)
     logging.info("Started logging.")
 
-    data_module = MultiTaskDataModule(
+    data_module = VirtualDataModule(
             root_dir=params['root_dir'], 
             window_len=params['window_len'],
             batch_size=params['batch_size']
@@ -42,20 +42,21 @@ def main():
                                   name=f"{run_id}"
                                   )
     tb_logger.log_hyperparams(params)
-    # wandb_logger = WandbLogger(project=f"bendr-pretraining",
-    #                             name=f"{run_id}",
-    #                             save_dir="./reports/logs/"
-    #                     )
+    wandb_logger = WandbLogger(entity="deepseg",
+                                project=f"bendr-pretraining",
+                                name=f"{run_id}",
+                                save_dir="./reports/logs/"
+                        )
     logging.info("Created logger.")
 
     trainer = pl.Trainer(
         accelerator='gpu', # gpu or cpu 
-        devices=params['gpus'],  # -1: use all available gpus, for cpu e.g. 4
-        strategy='ddp', # ddp
+        devices=-1,  # -1: use all available gpus, for cpu e.g. 4
+        # strategy='ddp', # ddp
 
         enable_progress_bar=True,  # disable progress bar
         # precision=16, # 16 bit float precision for training
-        logger = [tb_logger],
+        logger = [tb_logger, wandb_logger],
         log_every_n_steps=10, # every n-th batch is logged
 
         max_epochs=params['epochs'],

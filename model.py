@@ -47,8 +47,6 @@ def _make_mask(shape, p, total, span, allow_no_inds=False):
 
     return mask
 
-
-
 class BENDR(pl.LightningModule):
     """
     A more wav2vec 2.0 style of constrastive self-supervision, more inspired-by than exactly like it.
@@ -68,7 +66,6 @@ class BENDR(pl.LightningModule):
         if encoder_grad_frac < 1:
             encoder.register_backward_hook(lambda module, in_grad, out_grad:
                                            tuple(encoder_grad_frac * ig for ig in in_grad))
-
 
         self.encoder = encoder
         self.context_fn = context_fn
@@ -90,29 +87,6 @@ class BENDR(pl.LightningModule):
 
         # self.save_hyperparameters() # wandb 
 
-    
-    # def common_step(self, batch, batch_idx):
-    #     x, y = batch
-    #     x = x.permute(0, 2, 1)
-    #     z = self.encoder(x)
-
-    #     if self.permuted_encodings:
-    #         z = z.permute([1, 2, 0])
-    #     unmasked_z = z.clone()
-    #     batch_size, feat, samples = z.shape
-    #     mask = _make_mask((batch_size, samples), self.mask_rate, samples, self.mask_span) 
-
-    #     c = self.context_fn(z, mask)
-
-    #     # Select negative candidates and generate labels for which are correct labels
-    #     negatives, negative_inds = self._generate_negatives(z)
-
-    #     # Prediction -> batch_size x predict_length x predict_length
-    #     logits = self._calculate_similarity(unmasked_z, c, negatives)
-    #     loss = self.calculate_loss(logits, z)
-
-    #     return loss 
-
     def training_step(self, batch, batch_idx):
         #x, y = batch
         x = batch
@@ -133,12 +107,11 @@ class BENDR(pl.LightningModule):
 
         # Prediction -> batch_size x predict_length x predict_length
         logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
+        loss = self.calculate_loss(logits, z, "train")
 
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_epoch=True, logger=True)
         # print(f"Training loss: {loss}")
         return loss 
-    
     
     def validation_step(self, batch, batch_idx):
         #x, y = batch
@@ -164,9 +137,9 @@ class BENDR(pl.LightningModule):
         negatives, negative_inds = self._generate_negatives(z)
 
         logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
+        loss = self.calculate_loss(logits, z, "val")
 
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, on_epoch=True, logger=True)
         # print(f"Validation loss: {loss}")
         return loss 
 
@@ -195,7 +168,7 @@ class BENDR(pl.LightningModule):
         negatives, negative_inds = self._generate_negatives(z)
 
         logits = self._calculate_similarity(unmasked_z, c, negatives)
-        loss = self.calculate_loss(logits, z)
+        loss = self.calculate_loss(logits, z, "test")
         
         self.log("test_loss", loss)
         # print(f"Test loss: {loss}")
@@ -223,10 +196,10 @@ class BENDR(pl.LightningModule):
         batch_size, feat, full_len = z.shape
         z_k = z.permute([0, 2, 1]).reshape(-1, feat)
         with torch.no_grad():
-            # candidates = torch.arange(full_len).unsqueeze(-1).expand(-1, self.num_negatives).flatten()
+            candidates = torch.arange(full_len).unsqueeze(-1).expand(-1, self.num_negatives).flatten()
             negative_inds = torch.randint(0, full_len-1, size=(batch_size, full_len * self.num_negatives))
             # From wav2vec 2.0 implementation, I don't understand
-            # negative_inds[negative_inds >= candidates] += 1
+            negative_inds[negative_inds >= candidates] += 1
 
             for i in range(1, batch_size):
                 negative_inds[i] += i * full_len
@@ -234,11 +207,15 @@ class BENDR(pl.LightningModule):
         z_k = z_k[negative_inds.view(-1)].view(batch_size, full_len, self.num_negatives, feat)
         return z_k, negative_inds
 
-    def calculate_loss(self, logits, z):
+    def calculate_loss(self, logits, z, mode='train'):
         labels = torch.zeros(logits.shape[0], device=logits.device, dtype=torch.long)
         # Note the loss_fn here integrates the softmax as per the normal classification pipeline (leveraging logsumexp)
-        
-        return self.loss_fn(logits, labels) + self.beta * z.pow(2).mean()
+        loss = self.loss_fn(logits, labels)
+        reg = self.beta * z.pow(2).mean()
+        self.log(f"{mode}_reg_component", reg)
+        self.log(f"{mode}_loss_component", loss)
+        return loss + reg 
+        # return self.loss_fn(logits, labels) + self.beta * z.pow(2).mean()
 
     @staticmethod
     def _mask_pct(inputs, outputs):
@@ -257,11 +234,7 @@ class BENDR(pl.LightningModule):
             int(encoded_samples * self.mask_rate * self.mask_span))
         return desc
 
-
-
 ######################################################################################
-
-
 
 class _BENDREncoder(nn.Module):
     def __init__(self, in_features, encoder_h=256,):

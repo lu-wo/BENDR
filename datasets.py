@@ -6,6 +6,7 @@ import pandas as pd
 import os, fnmatch
 import logging
 import numpy as np
+from memory_profiler import profile
 
 from dn3.utils import min_max_normalize
 
@@ -16,14 +17,16 @@ def load_data_paths(root_dir, file_pattern):
         for filename in fnmatch.filter(filenames, file_pattern):
             paths.append(os.path.join(dirpath, filename))
     return paths
-
+@profile
 class FileSampler:
     def __init__(self, path, window_len, normalize=True, min_val=-1, max_val=1, cap_vals=True) -> None:
         self.path = path 
         self.df = pd.read_csv(self.path)
         self.tensor = torch.tensor(self.df.loc[:, "channel_0":"channel_127"].values, dtype=torch.float32)
-        # substitute values > 200 with 200
-        if cap_vals: 
+        self.max_val = self.tensor.max()
+        self.min_val = self.tensor.min()
+        
+        if cap_vals: # substitute values > 200 with 200
             self.tensor[self.tensor > 200] = 200
         if normalize:
             self.tensor = min_max_normalize(self.tensor, min_val, max_val)
@@ -32,8 +35,9 @@ class FileSampler:
         self.length = len(self.df)
         self.window_len = window_len
         self.max_sample = self.length // self.window_len
+        print(f"Init new FileSampler with length {self.length} window length {self.window_len} and {self.max_sample} samples")
 
-    def draw(self):
+    def draw(self, global_min, global_max):
         if self.cnt >= self.max_sample:
             print("Reached max sample")
         #     raise StopIteration
@@ -41,9 +45,17 @@ class FileSampler:
         start = random.randint(0, self.length - self.window_len - 1)
         end = start + self.window_len
         self.cnt += 1
-        return self.df.loc[start:end, "channel_0":"channel_127"].values
+        tensor = self.tensor[start:end, :]
+        val = (self.max_val - self.min_val) / (global_max - global_min)
+        const = torch.ones((self.window_len, 1)) * val
+        tensor = torch.cat((tensor, const), dim=1)
+        # check if nan in tensor    
+        if torch.isnan(tensor).any():
+            logging.info(f"NaN in tensor from {self.path}")
+            raise ValueError 
+        return tensor
 
-    
+@profile    
 class MultiTaskDataset(torch.utils.data.Dataset):
     def __init__(self, root_dir=None, paths=None, file_pattern="*stream*.csv", window_len=1000, buffer_size=100):
         """
@@ -59,6 +71,7 @@ class MultiTaskDataset(torch.utils.data.Dataset):
         self.window_len = window_len
         self.participants_data_paths = load_data_paths(self.root_dir, self.file_pattern) if paths is None else paths
         self.nb_files = len(self.participants_data_paths)
+        logging.info(f"Found {self.nb_files} files for this dataset.")
         self.buffer_size = min(self.nb_files, buffer_size)
         self.buffer = self._init_buffer()
         self.len = sum(len(self._load_participant_data(path)) for path in self.participants_data_paths) // self.window_len
@@ -72,18 +85,18 @@ class MultiTaskDataset(torch.utils.data.Dataset):
         file_id = random.randint(0, self.buffer_size-1)
         if self.buffer[file_id].cnt >= self.buffer[file_id].max_sample:
             self.buffer[file_id] = self._draw_file_sampler() # replace file/sampler
-        return torch.tensor(self.buffer[file_id].draw(), dtype=torch.float32)
+        return torch.tensor(self.buffer[file_id].draw(self.global_min, self.global_max), dtype=torch.float32)
     
     def _compute_stats(self):
         self.length = 0
-        self.min_val = 1
-        self.max_val = -1
+        self.global_min = 1
+        self.global_max = -1
         for path in self.participants_data_paths: 
             df = self._load_participant_data(path).loc[:, "channel_0":"channel_127"].values 
             self.length += len(df)
             # print(f"min val {df.min().min()} max val {df.max().max()}")
-            self.min_val = min(self.min_val, df.min().min())
-            self.max_val = max(self.max_val, df.max().max())
+            self.global_min = min(self.global_min, df.min().min())
+            self.global_max = max(self.global_max, df.max().max())
         self.length //= self.window_len
     
     def _load_participant_data(self, path):
@@ -104,9 +117,9 @@ class MultiTaskDataset(torch.utils.data.Dataset):
                 break
         return sampler
 
-
+@profile
 class MultiTaskDataModule(pl.LightningDataModule):
-    def __init__(self, root_dir, file_pattern="*stream*.csv", window_len=1000, buffer_size=50, batch_size=32):
+    def __init__(self, root_dir, file_pattern="*stream*.csv", window_len=1000, buffer_size=100, batch_size=32):
         super().__init__()
         self.root_dir = root_dir
         self.file_pattern = file_pattern
@@ -114,7 +127,7 @@ class MultiTaskDataModule(pl.LightningDataModule):
         self.buffer_size = buffer_size
         self.batch_size = batch_size
 
-        logging.info(f"Root dir {self.root_dir}")   
+        logging.info(f"Init DataModule with window_len {self.window_len} buffer_size {self.buffer_size} batch_size {self.batch_size}")
         
         """
         Directory structure:
