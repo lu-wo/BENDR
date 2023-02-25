@@ -2,13 +2,13 @@
 params = {}
 
 # BENDR pretrained
-params['bendr_dir'] = '/itet-stor/wolflu/net_scratch/projects/BENDR/reports/logs/20230224-133833'
+params['bendr_dir'] = "/itet-stor/klebed/deepeye_itetnas04/semester-project-djl/pretrained_bendr/20230224-151256"
 
 # Finetuning 
-params['data_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/semester-project-djl/datasets/LR_task_debug.npz'
+params['data_dir'] = '/itet-stor/klebed/deepeye_itetnas04/semester-project-djl/datasets/LR_task_debug.npz' 
 params['epochs'] = 10
 params['batch_size'] = 32
-params['learning_rate'] = 1e-5
+params['learning_rate'] = 2e-4 
 params['loss'] = 'cross_entropy' # 'cross_entropy' or 'mse'
 
 # Finetuning model 
