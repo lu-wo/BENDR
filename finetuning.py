@@ -127,7 +127,7 @@ logging.info("Loaded BENDR model.")
 def build_mlp(hidden_layers, input_size, output_logits, hidden_size, dropout):
     layers = []
     for i in range(hidden_layers):
-        layers.append(torch.nn.Linear(input_size if i == 0 else hidden_size, 2*hidden_size if i == 0 else hidden_size))
+        layers.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
         layers.append(torch.nn.ReLU())
         layers.append(torch.nn.Dropout(dropout))
     layers.append(torch.nn.Linear(hidden_size, output_logits))
