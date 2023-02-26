@@ -2,7 +2,7 @@
 params = {}
 
 # Training 
-params['epochs'] = 200 
+params['epochs'] = 250 
 params['multi_gpu'] = False
 # params['gpus'] = 2
 params['learning_rate'] = 1e-5
@@ -23,8 +23,8 @@ elif params['dataset'] == 'processing_speed':
 elif params['dataset'] == 'dots':
     params['root_dir'] =  '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream/dots' 
 
-params['batch_size'] = 16
-params['window_len'] = 4000
+params['batch_size'] = 32
+params['window_len'] = 2000
 
 #Contextualizer
 params['hidden_feedforward'] = 3076
@@ -44,15 +44,15 @@ params['finetuning'] = False
 #Encoder
 params['in_features'] = 129
 params['encoder_h'] = 128
-params['enc_width'] = (3, 2, 2, 2) # 2000: 3x2, 4000: 4x2, 8000: 5x2
-params['enc_downsample'] = (3, 2, 2, 2)
+params['enc_width'] = (3, 2, 2, 2, 2) # 2000: 3x2, 4000: 4x2, 8000: 5x2
+params['enc_downsample'] = (3, 2, 2, 2, 2)
 params['enc_dropout'] = 0.0
 params['projection_head'] = False
 
 #BENDR
 params['mask_rate'] = 0.1
 params['mask_span'] = 5
-params['temp'] = 1
+params['temp'] = 0.5
 params['permuted_encodings'] = False
 params['permuted_contexts'] = False
 params['enc_feat_l2'] = 0.001
