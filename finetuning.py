@@ -3,6 +3,7 @@ from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torchmetrics.classification import BinaryAccuracy
+from torchmetrics import MeanSquaredError
 import os, sys 
 import yaml
 import numpy as np 
@@ -70,18 +71,18 @@ test_ids = ids[int(len(ids)*0.9):]
 
 # split data
 X_train = np.transpose(X[np.isin(y[:, 0], train_ids)], (0, 2, 1))
-y_train = np.expand_dims(y[np.isin(y[:, 0], train_ids)][:, 1], axis=1)
+y_train = y[np.isin(y[:, 0], train_ids)][:, 1:]
 X_val = np.transpose(X[np.isin(y[:, 0], val_ids)], (0, 2, 1))
-y_val = np.expand_dims(y[np.isin(y[:, 0], val_ids)][:, 1], axis=1)
+y_val = y[np.isin(y[:, 0], val_ids)][:, 1:]
 X_test = np.transpose(X[np.isin(y[:, 0], test_ids)], (0, 2, 1))
-y_test = np.expand_dims(y[np.isin(y[:, 0], test_ids)][:, 1], axis=1)
+y_test = y[np.isin(y[:, 0], test_ids)][:, 1:]
 # to each sample 
 
 # create dataloaders
-batch_size = 64
-train_data = TensorDataset(torch.from_numpy(X_train).float().cuda(), torch.from_numpy(y_train).float().cuda())
-val_data = TensorDataset(torch.from_numpy(X_val).float().cuda(), torch.from_numpy(y_val).float().cuda())
-test_data = TensorDataset(torch.from_numpy(X_test).float().cuda(), torch.from_numpy(y_test).float().cuda())
+batch_size = params['batch_size']
+train_data = TensorDataset(torch.from_numpy(X_train).float(), torch.from_numpy(y_train).float())
+val_data = TensorDataset(torch.from_numpy(X_val).float(), torch.from_numpy(y_val).float())
+test_data = TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_test).float())
 
 # we need to normalize and add the additional channel 
 # def collate_fn(global_min, global_max, batch):
@@ -126,7 +127,7 @@ logging.info("Loaded BENDR model.")
 def build_mlp(hidden_layers, input_size, output_logits, hidden_size, dropout):
     layers = []
     for i in range(hidden_layers):
-        layers.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
+        layers.append(torch.nn.Linear(input_size if i == 0 else hidden_size, 2*hidden_size if i == 0 else hidden_size))
         layers.append(torch.nn.ReLU())
         layers.append(torch.nn.Dropout(dropout))
     layers.append(torch.nn.Linear(hidden_size, output_logits))
@@ -141,8 +142,8 @@ class FinetuningModel(pl.LightningModule):
         self.lr = lr
         self.loss_fn = nn.BCELoss() if loss == 'cross_entropy' else nn.MSELoss()
         self.loss_name = loss
-        self.train_acc = BinaryAccuracy()
-        self.valid_acc = BinaryAccuracy()
+        self.train_metric = BinaryAccuracy() if loss == 'cross_entropy' else MeanSquaredError()
+        self.val_metric = BinaryAccuracy() if loss == 'cross_entropy' else MeanSquaredError()
     
     def forward(self, x):
         x = self.model.encoder(x) # pass through BENDRCNN
@@ -161,26 +162,39 @@ class FinetuningModel(pl.LightningModule):
         y_hat = self(x)
         loss = self.loss(y_hat, y)
         self.log('train_loss', loss)
-        self.log('train_acc', self.train_acc(y_hat, y))
+        # root mse as metric if regression
+        self.log('train_metric', self.train_metric(y_hat, y) if self.loss_name == 'cross_entropy' else torch.sqrt(self.train_metric(y_hat, y)))
         return loss
 
     def training_epoch_end(self, outputs):
-        self.log('train_acc_epoch', self.train_acc.compute())
-        self.train_acc.reset()    
-        
+        self.log('train_metric_epoch', self.train_metric.compute() if self.loss_name == 'cross_entropy' else torch.sqrt(self.train_metric.compute()))
+        self.train_metric.reset()    
+
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
+        if batch_idx % 40 == 0:
+            logging.info(f'validation batch {batch_idx} loss: {loss} metric: {self.val_metric(y_hat, y)}')
         self.log('val_loss', loss)
+        self.log('val_metric', self.val_metric(y_hat, y) if self.loss_name == 'cross_entropy' else torch.sqrt(self.val_metric(y_hat, y)))
         return loss
+    
+    def validation_epoch_end(self, outputs):
+        self.log('val_metric_epoch', self.val_metric.compute() if self.loss_name == 'cross_entropy' else torch.sqrt(self.val_metric.compute()))
+        self.val_metric.reset()
     
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
         self.log('test_loss', loss)
+        self.log('test_metric', self.val_metric(y_hat, y) if self.loss_name == 'cross_entropy' else torch.sqrt(self.val_metric(y_hat, y)))
         return loss
+    
+    def test_epoch_end(self, outputs):
+        self.log('test_metric_epoch', self.val_metric.compute() if self.loss_name == 'cross_entropy' else torch.sqrt(self.val_metric.compute()))
+        self.val_metric.reset()
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -191,7 +205,7 @@ tb_logger = TensorBoardLogger("./reports/logs/",
                                   )
 tb_logger.log_hyperparams(params)
 wandb_logger = WandbLogger(entity="deepseg",
-                            project=f"bendr-finetuning",
+                            project=f"bendr-finetuning-{params['task']}",
                             name=f"{run_id}",
                             save_dir="./reports/logs/"
                     )
