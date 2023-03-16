@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --mail-type=NONE                     # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
-#SBATCH --output=log/%jqout                 # where to store the output (%j is the JOBID), subdirectory must exist
+#SBATCH --output=log/%j.out                 # where to store the output (%j is the JOBID), subdirectory must exist
 #SBATCH --error=log/%j.err                  # where to store error messages
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4

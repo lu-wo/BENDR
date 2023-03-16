@@ -22,7 +22,7 @@ class VirtualTensorDataset:
     """
     Loads all files into a list of dataframes and samples from them.
     """
-    def __init__(self, root_dir=None, paths=None, file_pattern="*stream*.csv", window_len=1000):
+    def __init__(self, root_dir=None, paths=None, file_pattern="*stream*.csv", window_len=1000, threshold=150):
         self.root_dir = root_dir
         self.file_pattern = file_pattern
         self.window_len = window_len
@@ -31,6 +31,7 @@ class VirtualTensorDataset:
         logging.info(f"Number of files: {self.nb_files}")
         self.dfs = [pd.read_csv(path) for path in self.participants_data_paths]
         self.tensors = [torch.tensor(df.loc[:, "channel_0":"channel_127"].values, dtype=torch.float32) for df in self.dfs]
+        self.tensors = [self.cap_values(tensor, theshold=threshold) for tensor in self.tensors]
         self.tensor_lengths = [len(tensor) for tensor in self.tensors]
         self.max_vals = [tensor.max() for tensor in self.tensors]
         self.min_vals = [tensor.min() for tensor in self.tensors]
@@ -61,6 +62,14 @@ class VirtualTensorDataset:
         Has to be called after each epoch
         """
         self.offsets = [random.randint(0, max_offset) for max_offset in self.max_offsets]
+
+    def cap_values(self, tensor, threshold=150):
+        """
+        Cap values in tensor to threshold
+        """
+        tensor[tensor > threshold] = threshold
+        tensor[tensor < -threshold] = -threshold
+        return tensor
 
     def __len__(self):
         return self.len
