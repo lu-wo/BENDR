@@ -17,6 +17,7 @@ def load_data_paths(root_dir, file_pattern):
         for filename in fnmatch.filter(filenames, file_pattern):
             paths.append(os.path.join(dirpath, filename))
     return paths
+
 @profile
 class FileSampler:
     def __init__(self, path, window_len, normalize=True, min_val=-1, max_val=1, cap_vals=True) -> None:
