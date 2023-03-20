@@ -48,7 +48,7 @@ class VirtualTensorDataset:
         
         # normalize and add constant channel to each tensor 
         for i, tensor in enumerate(self.tensors):
-            tensor = min_max_normalize(tensor, self.min_vals[i], self.max_vals[i])
+            tensor = min_max_normalize(tensor)
             val = (self.max_vals[i] - self.min_vals[i]) / (self.global_max - self.global_min)
             const = torch.ones((len(tensor), 1)) * val
             # print(f"tensor shape {tensor.shape}")
