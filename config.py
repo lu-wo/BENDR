@@ -2,7 +2,7 @@
 params = {}
 
 # Training 
-params['epochs'] = 200 
+params['epochs'] = 300 
 params['multi_gpu'] = False
 # params['gpus'] = 2
 params['learning_rate'] = 1e-5
@@ -13,18 +13,18 @@ params['dataset'] = 'all' # 'all' or 'dots' or 'movie' or 'zuco' or 'processing_
 if params['dataset'] == 'debug':
     params['root_dir'] = '/itet-stor/wolflu/net_scratch/projects/EEGEyeNet_experimental/data/stream_debug' 
 elif params['dataset'] == 'all':
-    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream'
+    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/stream/stream_on_screen_129_chan_amplitude_cleaned'
 elif params['dataset'] == 'movie':
-    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream/movie'
+    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/stream/stream_whole/movie'
 elif params['dataset'] == 'zuco':
-    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream/zuco'
+    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/stream/stream_whole/zuco'
 elif params['dataset'] == 'processing_speed':
-    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream/processing_speed'
+    params['root_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/data/stream/stream_whole/processing_speed'
 elif params['dataset'] == 'dots':
-    params['root_dir'] =  '/itet-stor/wolflu/deepeye_itetnas04/data/single_stream/dots' 
+    params['root_dir'] =  '/itet-stor/wolflu/deepeye_itetnas04/data/stream/stream_whole/dots' 
 
 params['batch_size'] = 32
-params['window_len'] = 4000
+params['window_len'] = 2000
 
 #Contextualizer
 params['hidden_feedforward'] = 3076
@@ -42,8 +42,8 @@ params['start_token'] = -5
 params['finetuning'] = False
 
 #Encoder
-params['in_features'] = 129
-params['encoder_h'] = 512
+params['in_features'] = 130
+params['encoder_h'] = 128
 params['enc_width'] = (3, 2, 2, 2, 2)
 params['enc_downsample'] = (3, 2, 2, 2, 2)
 params['enc_dropout'] = 0.0
@@ -51,7 +51,7 @@ params['projection_head'] = False
 
 #BENDR
 params['mask_rate'] = 0.1
-params['mask_span'] = 3
+params['mask_span'] = 5
 params['temp'] = 0.5
 params['permuted_encodings'] = False
 params['permuted_contexts'] = False

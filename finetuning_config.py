@@ -2,7 +2,7 @@
 params = {}
 
 # BENDR pretrained
-params['bendr_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/semester-project-djl/pretrained_bendr/20230226-142246'
+params['bendr_dir'] = '/itet-stor/wolflu/net_scratch/projects/BENDR/reports/logs/20230327-185858'
 params['task'] = 'amplitude' # 'position' or 'LR angle' or 'angle' or 'ampltiude'
 
 # Finetuning 

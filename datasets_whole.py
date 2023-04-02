@@ -22,7 +22,7 @@ class VirtualTensorDataset:
     """
     Loads all files into a list of dataframes and samples from them.
     """
-    def __init__(self, root_dir=None, paths=None, file_pattern="*stream*.csv", window_len=1000, threshold=150):
+    def __init__(self, root_dir=None, paths=None, file_pattern="*stream*.csv", window_len=1000, cap_vals=False, threshold=150):
         self.root_dir = root_dir
         self.file_pattern = file_pattern
         self.window_len = window_len
@@ -30,8 +30,9 @@ class VirtualTensorDataset:
         self.nb_files = len(self.participants_data_paths)
         logging.info(f"Number of files: {self.nb_files}")
         self.dfs = [pd.read_csv(path) for path in self.participants_data_paths]
-        self.tensors = [torch.tensor(df.loc[:, "channel_0":"channel_127"].values, dtype=torch.float32) for df in self.dfs]
-        self.tensors = [self.cap_values(tensor, theshold=threshold) for tensor in self.tensors]
+        self.tensors = [torch.tensor(df.loc[:, "channel_0":"channel_128"].values, dtype=torch.float32) for df in self.dfs]
+        if cap_vals:
+            self.tensors = [self.cap_values(tensor, threshold=threshold) for tensor in self.tensors]
         self.tensor_lengths = [len(tensor) for tensor in self.tensors]
         self.max_vals = [tensor.max() for tensor in self.tensors]
         self.min_vals = [tensor.min() for tensor in self.tensors]

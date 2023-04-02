@@ -28,8 +28,8 @@ log_dir = f'reports/logs/{run_id}_finetuning_{params["task"]}'
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 # change std output to file in log_dir 
-sys.stderr = open(f"{log_dir}/stderr.log", "w")
-sys.stdout = open(f"{log_dir}/stdout.log", "w")    
+# sys.stderr = open(f"{log_dir}/stderr.log", "w")
+# sys.stdout = open(f"{log_dir}/stdout.log", "w")    
 # Create logging file
 logging.basicConfig(filename=f"{log_dir}/info.log", level=logging.INFO)
 logging.info("Started logging.")
