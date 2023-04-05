@@ -7,7 +7,7 @@ params['task'] = 'amplitude' # 'position' or 'LR angle' or 'angle' or 'ampltiude
 
 # Finetuning 
 params['data_dir'] = '/itet-stor/wolflu/deepeye_itetnas04/semester-project-djl/datasets/Direction_task_with_dots_minprep_synch.npz' 
-params['epochs'] = 50
+params['epochs'] = 10
 params['batch_size'] = 32
 params['learning_rate'] = 1e-3
 params['loss'] = 'mse' # 'cross_entropy' or 'mse' or 'angle_loss'

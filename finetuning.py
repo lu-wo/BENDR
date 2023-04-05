@@ -32,7 +32,7 @@ if not os.path.exists(log_dir):
 # sys.stdout = open(f"{log_dir}/stdout.log", "w")    
 # Create logging file
 logging.basicConfig(filename=f"{log_dir}/info.log", level=logging.INFO)
-logging.info("Started logging.")
+print("Started logging.")
 
 # Load and split data
 np.random.seed(42)
@@ -41,10 +41,10 @@ X = np_file['EEG'][:,:,:128]
 global_min = np.min(X)
 global_max = np.max(X)
 y = np_file['labels']
-# logging.info(f"y {y[:, 1]}")
-logging.info("Loaded data.")
-logging.info(f"X shape: {X.shape}")
-logging.info(f"y shape: {y.shape}")
+# print(f"y {y[:, 1]}")
+print("Loaded data.")
+print(f"X shape: {X.shape}")
+print(f"y shape: {y.shape}")
 
 # normalize and add channel per sample in X 
 X_norm = np.zeros((X.shape[0], X.shape[1], X.shape[2] + 1))
@@ -57,8 +57,8 @@ for i in range(len(X)):
     const = np.ones((X[i].shape[0], 1)) * val
     X_norm[i] = np.concatenate((X[i], const), axis=1)
 X = X_norm
-logging.info("Normalized data and added channel.")
-logging.info(f"X shape: {X.shape}")
+print("Normalized data and added channel.")
+print(f"X shape: {X.shape}")
 
 # split data based on first column id 
 ids = np.unique(y[:, 0])
@@ -69,7 +69,7 @@ test_ids = ids[int(len(ids)*0.9):]
 
 # split data
 idx = 2 if params['task'] == 'angle' else 1 # is is amplitude 
-logging.info(f"idx {idx}")
+print(f"idx {idx}")
 X_train = np.transpose(X[np.isin(y[:, 0], train_ids)], (0, 2, 1))
 y_train = np.expand_dims(y[np.isin(y[:, 0], train_ids)][:, idx], 1)
 X_val = np.transpose(X[np.isin(y[:, 0], val_ids)], (0, 2, 1))
@@ -77,11 +77,11 @@ y_val = np.expand_dims(y[np.isin(y[:, 0], val_ids)][:, idx], 1)
 X_test = np.transpose(X[np.isin(y[:, 0], test_ids)], (0, 2, 1))
 y_test = np.expand_dims(y[np.isin(y[:, 0], test_ids)][:, idx], 1)
 # to each sample 
-logging.info(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
-logging.info(f"X_val shape: {X_val.shape}, y_val shape: {y_val.shape}")
-logging.info(f"X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
+print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
+print(f"X_val shape: {X_val.shape}, y_val shape: {y_val.shape}")
+print(f"X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
 
-# logging.info("y_train[:5] {}".format(y_train[:5]))
+# print("y_train[:5] {}".format(y_train[:5]))
 
 # create dataloaders
 batch_size = params['batch_size']
@@ -91,7 +91,7 @@ test_data = TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_t
 train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, drop_last=True)
 val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=False, drop_last=True)
 test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, drop_last=True)
-logging.info("Created dataloaders.")
+print("Created dataloaders.")
 
 # load model
 bendr_params_path = os.path.join(params['bendr_dir'], 'version_0', 'hparams.yaml')
@@ -108,7 +108,7 @@ ckpt_path = [f for f in os.listdir(params['bendr_dir']) if f.endswith('.ckpt')][
 ckpt_path = os.path.join(params['bendr_dir'], ckpt_path)
 # load weights
 model.load_state_dict(torch.load(ckpt_path)['state_dict'])
-logging.info("Loaded BENDR model.")
+print("Loaded BENDR model.")
 
 # build finetuning MLP
 def build_mlp(hidden_layers, input_size, output_logits, hidden_size, dropout):
@@ -139,7 +139,7 @@ class AngleMetric(Metric):
         self.total += 1 # reduced error already 
 
     def compute(self):
-        logging.info(f"metric error {self.errors}, total {self.total} = {self.errors / self.total}")
+        print(f"metric error {self.errors}, total {self.total} = {self.errors / self.total}")
         return self.errors.float() / self.total
     
     def _compute_angle_loss(self, preds, target): 
@@ -186,7 +186,7 @@ class FinetuningModel(pl.LightningModule):
         self.train_metrics = AngleMetric() if loss == 'angle_loss' else self.train_metric
         self.val_metric = BinaryAccuracy() if loss == 'cross_entropy' else MeanSquaredError(squared=False)
         self.val_metrics = AngleMetric() if loss == 'angle_loss' else self.val_metric
-        logging.info(f"Created finetuning model for task {params['task']} with loss {loss} and metric {self.train_metrics} and {self.val_metrics}")
+        print(f"Created finetuning model for task {params['task']} with loss {loss} and metric {self.train_metrics} and {self.val_metrics}")
     
     def forward(self, x):
         x = self.model.encoder(x) # pass through BENDRCNN
@@ -197,10 +197,16 @@ class FinetuningModel(pl.LightningModule):
     def loss(self, y_hat, y):
         # if self.loss_name == 'cross_entropy':
             # y_hat = torch.sigmoid(y_hat)
-        # logging.info(f"y_hat and y concat: {torch.cat((y_hat, y), dim=1)}")
-        # logging.info(f"y_hat and y concatentared shape: {torch.cat((y_hat, y), dim=1)}")
+        # print(f"y_hat and y concat: {torch.cat((y_hat, y), dim=1)}")
+        print(f"y_hat and y: \n{torch.cat((y_hat, y), dim=1)}")
+        # print abs diff of angles
+        print(f"diff: {torch.abs(y_hat - y)}")
+        # metric torch.mean(torch.abs(torch.atan2(torch.sin(preds - target), torch.cos(preds - target))))
+        print(f"angle metric: {torch.abs(torch.atan2(torch.sin(y_hat - y), torch.cos(y_hat - y)))}")
+
         loss = self.loss_fn(y_hat, y)
-        # logging.info(f"Loss: {loss}")
+        print(f"loss {loss}")
+        # print(f"Loss: {loss}")
         return loss
     
     def training_step(self, batch, batch_idx):
@@ -208,11 +214,12 @@ class FinetuningModel(pl.LightningModule):
         y_hat = self(x)
         loss = self.loss(y_hat, y)
         
-        # logging.info(f"Shapes of y_hat and y: {y_hat.shape}, {y.shape}")
+        # print(f"Shapes of y_hat and y: {y_hat.shape}, {y.shape}")
 
         self.log('train_loss', loss)
         # root mse as metric if regression
-        self.log('train_metric', self.train_metric(y_hat, y)) 
+        self.log('train_metric', self.train_metric(y_hat, y))
+        print(f"train loss: {loss} metric: {self.train_metric.compute()}") 
         return loss
 
     def training_epoch_end(self, outputs):
@@ -224,12 +231,13 @@ class FinetuningModel(pl.LightningModule):
         y_hat = self(x)
         loss = self.loss(y_hat, y)
         # if batch_idx % 40 == 0:
-        #     logging.info(f'validation batch {batch_idx} loss: {loss} metric: {self.val_metric.compute()}')
+        #     print(f'validation batch {batch_idx} loss: {loss} metric: {self.val_metric.compute()}')
 
-        # logging.info(f"Shapes of y_hat and y: {y_hat.shape}, {y.shape}")
+        # print(f"Shapes of y_hat and y: {y_hat.shape}, {y.shape}")
 
         self.log('val_loss', loss)
         self.log('val_metric', self.val_metric(y_hat, y) if self.loss_name == 'cross_entropy' else self.val_metric(y_hat, y))
+        print(f"val loss {loss} metric: {self.val_metric.compute()}")
         return loss
     
     def validation_epoch_end(self, outputs):
@@ -274,7 +282,7 @@ trainer = Trainer(
     max_epochs=params['epochs'], 
     logger=[tb_logger],
     callbacks=[
-        EarlyStopping(monitor='val_loss', patience=15, verbose=True),
+        EarlyStopping(monitor='val_loss', patience=3, verbose=True),
         ModelCheckpoint(monitor='val_loss', save_top_k=1, verbose=True)
     ]
     )
@@ -282,13 +290,13 @@ trainer = Trainer(
 # train
 x_rand = torch.rand(batch_size, 129, 500)
 x_output = model(x_rand)
-logging.info(f"Model output shape: {x_output.shape}")
+print(f"Model output shape: {x_output.shape}")
 
-logging.info("Started training.")
+print("Started training.")
 trainer.fit(model, train_loader, val_loader)
-logging.info("Finished training.")
+print("Finished training.")
 
 # test
-logging.info("Started testing.")
+print("Started testing.")
 trainer.test(model, dataloaders=test_loader)
-logging.info("Finished testing.")
+print("Finished testing.")
