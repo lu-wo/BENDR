@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from .dataset_whole import create_annotations
+from dataset.dataset_whole import create_annotations
 
 
 """
@@ -52,7 +52,9 @@ class EMGRepDataset(Dataset):
             "acc",
         }, f"Positive mode {self.positive_mode} must be 'none', 'objects', 'acc'."
 
-        self.emg, self.stimulus, self.info, self.object, self.acc = self._load_data(mat_files)
+        self.emg, self.stimulus, self.info, self.object, self.acc = self._load_data(
+            mat_files
+        )
 
         self.rng = np.random.default_rng(seed=42)
 
@@ -79,7 +81,7 @@ class EMGRepDataset(Dataset):
             reobject = mat_file["reobject"]
             acc = mat_file["acc"]
 
-            label = label -1 #se
+            label = label - 1  # se
             # indices = label == 0
             # label[indices] == self.num_classes
 
@@ -87,7 +89,7 @@ class EMGRepDataset(Dataset):
             while idx + self.seq_len <= signal.shape[0]:
                 emg.append(signal[idx : idx + self.seq_len])
                 stimulus.append(label[idx : idx + self.seq_len])
-                if self.positive_mode =="objects":
+                if self.positive_mode == "objects":
                     object.append(reobject[idx : idx + self.seq_len])
                 elif self.positive_mode == "acc":
                     acc_data.append(acc[idx : idx + self.seq_len])
@@ -115,8 +117,8 @@ class EMGRepDataset(Dataset):
             object = np.vectorize(map_dict.get)(object)
             unique = np.unique(object)
             print(f"New unique labels: {unique}")
-            
-        else: 
+
+        else:
             object = None
         if self.positive_mode == "acc":
             acc_data = np.stack(acc_data)
@@ -144,7 +146,9 @@ class EMGRepDataset(Dataset):
         return np.stack(blocks)
 
     # TODO: needs to be corrected
-    def _sample_positive_seq(self, info: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _sample_positive_seq(
+        self, info: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Samples a positive sequence based on the positive mode.
 
         Args:
@@ -167,7 +171,9 @@ class EMGRepDataset(Dataset):
         }, "Positive mode must be 'subject', 'session' or 'label'."
 
         if self.positive_mode == "subject":
-            positive_mode_condition = np.all(self.info[:, [0, 3]] == info[[0, 3]], axis=1)
+            positive_mode_condition = np.all(
+                self.info[:, [0, 3]] == info[[0, 3]], axis=1
+            )
 
         if self.positive_mode == "session":
             positive_mode_condition = np.all(self.info == info, axis=1)
@@ -178,7 +184,11 @@ class EMGRepDataset(Dataset):
         positive_indices = positive_mode_condition.nonzero()[0]
         positive_idx = self.rng.choice(positive_indices)
 
-        return self.emg[positive_idx], self.stimulus[positive_idx], self.info[positive_idx]
+        return (
+            self.emg[positive_idx],
+            self.stimulus[positive_idx],
+            self.info[positive_idx],
+        )
 
     def __len__(self) -> int:
         """Get the length of the dataset.
@@ -188,9 +198,27 @@ class EMGRepDataset(Dataset):
         """
         return self.emg.shape[0]
 
-    def __getitem__(self, idx: int) -> \
-            Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+    def __getitem__(
+        self, idx: int
+    ) -> Union[
+        Tuple[
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+        ],
+        Tuple[
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+            torch.Tensor,
+        ],
+    ]:
         """Get an item from the dataset.
 
         Args:
@@ -207,7 +235,7 @@ class EMGRepDataset(Dataset):
         emg_blocks = self.emg[idx]
         emg_blocks = torch.from_numpy(emg_blocks)
         stimulus_blocks = self.stimulus[idx]
-        
+
         stimulus_blocks = torch.from_numpy(stimulus_blocks)
         mask = stimulus_blocks == -1
         boxes, regions = create_annotations(stimulus_blocks)
@@ -216,22 +244,20 @@ class EMGRepDataset(Dataset):
         info = torch.from_numpy(info)
 
         if self.positive_mode == "objects":
-
             emg = emg_blocks
             stimulus = stimulus_blocks
             object_blocks = self.object[idx]
             object_blocks = torch.from_numpy(object_blocks)
             return (
-                emg.float(),    #seq, 16
-                stimulus.float(), #seq
+                emg.float(),  # seq, 16
+                stimulus.float(),  # seq
                 info.float(),
                 regions,
                 boxes,
                 mask,
-                object_blocks.long(), #seq
+                object_blocks.long(),  # seq
             )
         elif self.positive_mode == "acc":
-
             emg = emg_blocks
             stimulus = stimulus_blocks
             acc_data = self.acc[idx]
@@ -243,7 +269,7 @@ class EMGRepDataset(Dataset):
                 regions,
                 boxes,
                 mask,
-                acc_data.float(), #seq, 48
+                acc_data.float(),  # seq, 48
             )
         elif self.positive_mode == "none":
             # emg = emg_blocks.unsqueeze(0)
@@ -253,7 +279,9 @@ class EMGRepDataset(Dataset):
             stimulus = stimulus_blocks
 
         else:
-            raise NotImplementedError(f"Positive mode {self.positive_mode} is not implemented yet.")
+            raise NotImplementedError(
+                f"Positive mode {self.positive_mode} is not implemented yet."
+            )
             # positive_emg, positive_stimulus, positive_info = self._sample_positive_seq(info)
             # positive_emg_blocks = self.(positive_emg)
             # positive_stimulus_blocks = self._seq_to_blocks(positive_stimulus)
@@ -261,13 +289,5 @@ class EMGRepDataset(Dataset):
             # emg = np.stack([emg_blocks, positive_emg_blocks])
             # stimulus = np.stack([stimulus_blocks, positive_stimulus_blocks])
             # info = np.stack([info, positive_info])
-        
 
-        return (
-                emg.float(),
-                stimulus.float(),
-                info.float(),
-                regions,
-                boxes,
-                mask
-            )
+        return (emg.float(), stimulus.float(), info.float(), regions, boxes, mask)

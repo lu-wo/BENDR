@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .EMGRepDataset import EMGRepDataset
+from dataset.EMGRepDataset import EMGRepDataset
 
 import os
 from typing import Any, Dict

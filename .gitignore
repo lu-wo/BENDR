@@ -218,3 +218,5 @@ fabric.properties
 
 # directories with data 
 pretrained 
+
+data

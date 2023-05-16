@@ -29,45 +29,50 @@ def main():
     logging.info("Started logging.")
 
     data_module = EMGRepDataModule(
-        data_dir=params["data_dir"],
+        data_path=params["data_path"],
         split_mode="subject",
         n_subjects=10,
         n_days=5,
         n_times=2,
-        val_idx=3,
-        test_idx=5,
+        val_idx=[3],
+        test_idx=[5],
         seq_len=30000,
         seq_stride=30000,
     )
     logging.info("Created data module.")
     model = create_bendr(params)
+    # print number of model params
+    logging.info(
+        f"Number of model parameters: {sum(p.numel() for p in model.parameters())}"
+    )
+
     logging.info("Created model.")
 
     # Run the model
     tb_logger = TensorBoardLogger("./reports/logs/", name=f"{run_id}")
     tb_logger.log_hyperparams(params)
-    wandb_logger = WandbLogger(
-        entity="deepseg",
-        project=f"bendr-pretraining-emg",
-        name=f"{run_id}",
-        save_dir="./reports/logs/",
-    )
+    # wandb_logger = WandbLogger(
+    #     entity="deepseg",
+    #     project=f"bendr-pretraining-emg",
+    #     name=f"{run_id}",
+    #     save_dir="./reports/logs/",
+    # )
     logging.info("Created logger.")
 
     trainer = pl.Trainer(
-        accelerator="gpu",  # gpu or cpu
+        accelerator="mps",  # gpu or cpu
         devices=-1,  # -1: use all available gpus, for cpu e.g. 4
         # strategy='ddp', # ddp
         enable_progress_bar=True,  # disable progress bar
         # precision=16, # 16 bit float precision for training
-        logger=[tb_logger, wandb_logger],
+        logger=[tb_logger],
         log_every_n_steps=10,  # every n-th batch is logged
         max_epochs=params["epochs"],
         callbacks=[
             EarlyStopping(monitor="val_loss", patience=2),  # early stopping
             ModelCheckpoint(log_dir, monitor="val_loss", save_top_k=1),
         ],
-        auto_lr_find=True,  # automatically find learning rate
+        # auto_lr_find=True,  # automatically find learning rate
     )
 
     logging.info("Start training.")
